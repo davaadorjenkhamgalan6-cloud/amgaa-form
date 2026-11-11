@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Үзлэгийн хүсэлт</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px 16px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #f3f4f6; color: #111827;
+    }
+    .card {
+      max-width: 640px; margin: 0 auto; background: #fff;
+      border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    h1 { margin: 0 0 4px; font-size: 22px; }
+    .sub { margin: 0 0 24px; color: #6b7280; font-size: 14px; }
+    label { display: block; font-weight: 600; font-size: 14px; margin: 16px 0 6px; }
+    .req { color: #dc2626; }
+    input, select, textarea {
+      width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit;
+      border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+    }
+    input:focus, select:focus, textarea:focus { outline: 2px solid #4f46e5; border-color: transparent; }
+    textarea { min-height: 100px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+    button {
+      margin-top: 24px; width: 100%; padding: 12px; font-size: 16px; font-weight: 600;
+      color: #fff; background: #4f46e5; border: 0; border-radius: 8px; cursor: pointer;
+    }
+    button:disabled { background: #a5b4fc; cursor: wait; }
+    .msg { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 14px; display: none; }
+    .msg.ok  { display: block; background: #ecfdf5; color: #065f46; }
+    .msg.err { display: block; background: #fef2f2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Үзлэгийн хүсэлт</h1>
+    <p class="sub">Цахилгаан / галын эрсдэлийн үзлэг хийлгэх газрын мэдээллийг бөглөнө үү.</p>
+
+    <form id="form">
+      <label for="object_name">Үзлэг хийх газар / объект <span class="req">*</span></label>
+      <input id="object_name" name="object_name" required placeholder="Жишээ: Бодь цамхаг, 3-р давхар" />
+
+      <label for="address">Хаяг <span class="req">*</span></label>
+      <input id="address" name="address" required placeholder="Дүүрэг, хороо, гудамж" />
+
+      <div class="row">
+        <div>
+          <label for="request_type">Үзлэгийн төрөл <span class="req">*</span></label>
+          <select id="request_type" name="request_type" required>
+            <option value="">— Сонгох —</option>
+            <option value="electrical">Цахилгаан</option>
+            <option value="fire">Гал</option>
+            <option value="both">Цахилгаан ба гал</option>
+          </select>
+        </div>
+        <div>
+          <label for="priority">Яаралтай байдал <span class="req">*</span></label>
+          <select id="priority" name="priority" required>
+            <option value="">— Сонгох —</option>
+            <option value="high">Өндөр (3 ажлын өдөрт)</option>
+            <option value="medium">Дунд (7 ажлын өдөрт)</option>
+            <option value="low">Бага (14 ажлын өдөрт)</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="description">Асуудлын тайлбар <span class="req">*</span></label>
+      <textarea id="description" name="description" required
+        placeholder="Юу ажиглагдсан, яагаад үзлэг хэрэгтэй байгаа вэ"></textarea>
+
+      <label for="preferred_date">Хүссэн огноо (заавал биш)</label>
+      <input id="preferred_date" name="preferred_date" type="date" />
+
+      <div class="row">
+        <div>
+          <label for="requested_by">Таны нэр <span class="req">*</span></label>
+          <input id="requested_by" name="requested_by" required />
+        </div>
+        <div>
+          <label for="manager_email">Имэйл <span class="req">*</span></label>
+          <input id="manager_email" name="manager_email" type="email" required
+            placeholder="Дүгнэлт энэ хаяг руу ирнэ" />
+        </div>
+      </div>
+
+      <button type="submit" id="submit">Хүсэлт илгээх</button>
+      <div id="msg" class="msg"></div>
+    </form>
+  </div>
+
+  <script>
+    // ==== ЭНД ӨӨРИЙН SUPABASE-ИЙН МЭДЭЭЛЛИЙГ ОРУУЛНА ====
+    // Supabase → Project Settings → API Keys
+    const SUPABASE_URL = "https://XXXX.supabase.co";
+    const SUPABASE_KEY = "ЭНД_ANON_ЭСВЭЛ_PUBLISHABLE_KEY"; // service_role key-ийг ХЭЗЭЭ Ч энд бүү тавь
+    // =====================================================
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Хүссэн огноо маргаашаас өмнө байж болохгүй
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    document.getElementById("preferred_date").min = tomorrow;
+
+    const form = document.getElementById("form");
+    const btn = document.getElementById("submit");
+    const msg = document.getElementById("msg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      btn.textContent = "Илгээж байна…";
+      msg.className = "msg";
+
+      const f = new FormData(form);
+      const row = {
+        object_name:    f.get("object_name").trim(),
+        address:        f.get("address").trim(),
+        request_type:   f.get("request_type"),
+        priority:       f.get("priority"),
+        description:    f.get("description").trim(),
+        preferred_date: f.get("preferred_date") || null,
+        requested_by:   f.get("requested_by").trim(),
+        manager_email:  f.get("manager_email").trim(),
+      };
+
+      const { error } = await db.from("requests").insert(row);
+
+      if (error) {
+        console.error(error);
+        msg.className = "msg err";
+        msg.textContent = "Алдаа гарлаа: " + error.message;
+      } else {
+        form.reset();
+        msg.className = "msg ok";
+        msg.textContent = "Хүсэлт амжилттай илгээгдлээ. Шууд удирдлага хянасны дараа үзлэгийн хугацааг тань руу имэйлээр асууна.";
+      }
+      btn.disabled = false;
+      btn.textContent = "Хүсэлт илгээх";
+    });
+  </script>
+</body>
+</html>
