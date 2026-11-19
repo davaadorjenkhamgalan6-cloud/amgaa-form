@@ -11,8 +11,8 @@
 // ====== ЗӨВХӨН ЭНЭ ХЭСГИЙГ ӨӨРЧИЛНӨ ======
 const CONFIG = {
   APPROVERS: [
-    { key: 'director', name: 'Захирал',     email: 'balsan.b@bogd-insurance.com' },
-    { key: 'me',       name: 'Энх-Амгалан', email: 'enkh-amgalan.d@bogd-insurance.com' },
+    { key: 'director', name: 'Захирал',     email: 'balsan.b@bodi-insurance.com' },
+    { key: 'me',       name: 'Энх-Амгалан', email: 'enkh-amgalan.d@bodi-insurance.com' },
   ],
   TIMEZONE: 'Asia/Ulaanbaatar',
   // Хоосон орхивол автоматаар олно. Имэйлийн товч ажиллахгүй бол
