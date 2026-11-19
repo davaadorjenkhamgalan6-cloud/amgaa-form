@@ -96,7 +96,7 @@
           body: JSON.stringify({ op: "decide", ...p, reason }),
         }).then(r => r.json());
         if (!out.ok) throw new Error(out.error);
-        $("act").innerHTML = "";
+        await load(); // шинэ төлөвийг харуулна
         showMsg(out.message, true);
       } catch (err) {
         b.disabled = false; b.textContent = "Дахин оролдох";
