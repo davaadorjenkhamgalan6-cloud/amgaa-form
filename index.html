@@ -68,8 +68,8 @@
           <input id="requested_by" name="requested_by" required />
         </div>
         <div>
-          <label for="manager_email">Имэйл <span class="req">*</span></label>
-          <input id="manager_email" name="manager_email" type="email" required placeholder="Дүгнэлт энэ хаяг руу ирнэ" />
+          <label for="manager_email">Таны имэйл <span class="req">*</span></label>
+          <input id="manager_email" name="manager_email" type="email" required placeholder="Шийдвэр энэ хаяг руу ирнэ" />
         </div>
       </div>
 
@@ -82,7 +82,10 @@
     const SUPABASE_URL = "https://tclegxhoeqjndmexfqyp.supabase.co";
     const SUPABASE_KEY = "sb_publishable_OVDjlu_vBhP3woSa2ookwQ_Pu0ew_Zg";
 
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Apps Script-ийг Deploy хийсний дараах ".../exec" холбоос
+    const APPS_SCRIPT_URL = "";
+
+    const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
     // Хэрэглэгчийн орон нутгийн цагаар маргаашийн огноо (UTC биш)
     const t = new Date();
@@ -112,16 +115,30 @@
         manager_email: f.get("manager_email").trim(),
       };
 
-      const { error } = await db.from("requests").insert(row);
+      try {
+        if (!APPS_SCRIPT_URL) throw new Error("Илгээх холбоос (APPS_SCRIPT_URL) тохируулаагүй байна");
+        // text/plain тул CORS preflight шаардахгүй
+        const res = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ ...row, requester_email: row.manager_email }),
+        });
+        const out = await res.json();
+        if (!out.ok) throw new Error(out.error || "Тодорхойгүй алдаа");
 
-      if (error) {
-        console.error(error);
-        msg.className = "msg err";
-        msg.textContent = "Алдаа гарлаа: " + error.message;
-      } else {
+        // Supabase-д нөөц хуулбар (алдаа гарвал хүсэлтийг зогсоохгүй)
+        if (db) {
+          const { error } = await db.from("requests").insert(row);
+          if (error) console.warn("Supabase:", error);
+        }
+
         form.reset();
         msg.className = "msg ok";
-        msg.textContent = "Хүсэлт амжилттай илгээгдлээ. Шууд удирдлага хянасны дараа үзлэгийн хугацааг тань руу имэйлээр асууна.";
+        msg.textContent = "Хүсэлт амжилттай илгээгдлээ (дугаар: " + out.id + "). Шийдвэр гармагц " + row.manager_email + " хаяг руу имэйлээр мэдэгдэнэ.";
+      } catch (err) {
+        console.error(err);
+        msg.className = "msg err";
+        msg.textContent = "Алдаа гарлаа: " + err.message;
       }
       btn.disabled = false;
       btn.textContent = "Хүсэлт илгээх";
