@@ -15,9 +15,8 @@ const CONFIG = {
     { key: 'me',       name: 'Энх-Амгалан', email: 'enkh-amgalan.d@bodi-insurance.com' },
   ],
   TIMEZONE: 'Asia/Ulaanbaatar',
-  // Хоосон орхивол автоматаар олно. Имэйлийн товч ажиллахгүй бол
-  // Deploy хийсний дараах ".../exec" холбоосыг энд тавина.
-  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycby2BlODHGqv6pkayWV74rQgsOlFgEZzMyb8a3ME4F0Bus0QcTlhldrWwlDQz7FrhcTCLQ/exec',
+  // Имэйлийн "Зөвшөөрөх / Татгалзах" товч энэ хуудсыг нээнэ
+  DECIDE_PAGE_URL: 'https://amgaa-form.vercel.app/decide.html',
 };
 // ==========================================
 
@@ -56,6 +55,13 @@ function setup() {
 function doPost(e) {
   try {
     const d = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (d.op === 'decide') {
+      try {
+        return json({ ok: true, message: decide(d.id, d.who, d.sig, d.action, d.reason) });
+      } catch (err) {
+        return json({ ok: false, error: err.message });
+      }
+    }
     const req = {
       object_name: clean(d.object_name, 200),
       address: clean(d.address, 300),
@@ -94,32 +100,22 @@ function doPost(e) {
   }
 }
 
-// ---------- 2. Имэйлийн товч дарахад нээгдэх хуудас ----------
+// ---------- 2. Шийдвэрийн хуудас (decide.html) хүсэлтийн мэдээлэл авах ----------
+// GET ?op=info&id=..&who=..&sig=..  → JSON
+// Бусад GET (хуучин холбоос) → decide.html руу чиглүүлэх хуудас
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  if (p.op !== 'info') {
+    const q = ['action', 'id', 'who', 'sig'].map(k => k + '=' + encodeURIComponent(p[k] || '')).join('&');
+    const href = CONFIG.DECIDE_PAGE_URL + '?' + q;
+    return page('Шийдвэрийн хуудас', '<p><a href="' + esc(href) + '" target="_top">Энд дарж шийдвэрийн хуудсыг нээнэ үү</a></p>');
+  }
   const approver = CONFIG.APPROVERS.find(a => a.key === p.who);
-  if (!p.id || !approver || !validSig(p.id, p.who, p.sig)) return page('Холбоос буруу байна', '<p>Энэ холбоос хүчингүй байна.</p>');
-
+  if (!p.id || !approver || !validSig(p.id, p.who, p.sig)) return json({ ok: false, error: 'Холбоос хүчингүй байна' });
   const row = findRow(p.id);
-  if (!row) return page('Хүсэлт олдсонгүй', '<p>Хүсэлт олдсонгүй.</p>');
+  if (!row) return json({ ok: false, error: 'Хүсэлт олдсонгүй' });
   const r = readRow(row);
-  if (r.status !== STATUS.pending) return page('Шийдвэр гарсан', alreadyHtml(r));
-
-  const action = p.action === 'reject' ? 'reject' : 'approve';
-  const form = action === 'approve'
-    ? '<button id="b" class="ok" onclick="go()">Зөвшөөрөх</button>'
-    : '<label>Татгалзсан шалтгаан <span style="color:#dc2626">*</span></label>' +
-      '<textarea id="reason" placeholder="Менежерт энэ шалтгаан имэйлээр очно"></textarea>' +
-      '<button id="b" class="no" onclick="go()">Татгалзах</button>';
-  const script =
-    '<script>function go(){var r=document.getElementById("reason");var reason=r?r.value.trim():"";' +
-    'if(r&&!reason){alert("Шалтгаанаа бичнэ үү");return;}' +
-    'var b=document.getElementById("b");b.disabled=true;b.textContent="Түр хүлээнэ үү…";' +
-    'google.script.run.withSuccessHandler(function(m){document.getElementById("act").innerHTML="<p class=\\"done\\">"+m+"</p>";})' +
-    '.withFailureHandler(function(err){b.disabled=false;b.textContent="Дахин оролдох";alert(err.message);})' +
-    '.decide(' + JSON.stringify(p.id) + ',' + JSON.stringify(p.who) + ',' + JSON.stringify(p.sig) + ',' + JSON.stringify(action) + ',reason);}</script>';
-  return page(action === 'approve' ? 'Хүсэлт зөвшөөрөх' : 'Хүсэлт татгалзах',
-    detailsHtml(r) + '<div id="act">' + form + '</div>' + script);
+  return json({ ok: true, approver: approver.name, request: r, pending: r.status === STATUS.pending });
 }
 
 // ---------- 3. Шийдвэр (хуудасны товчноос дуудагдана) ----------
@@ -207,11 +203,8 @@ function sign(id, who) {
 function validSig(id, who, sig) {
   return !!sig && sign(id, who) === sig;
 }
-function webAppUrl() {
-  return CONFIG.WEB_APP_URL || ScriptApp.getService().getUrl();
-}
 function link(id, who, action) {
-  return webAppUrl() + '?action=' + action + '&id=' + encodeURIComponent(id) + '&who=' + who + '&sig=' + sign(id, who);
+  return CONFIG.DECIDE_PAGE_URL + '?action=' + action + '&id=' + encodeURIComponent(id) + '&who=' + who + '&sig=' + sign(id, who);
 }
 function now() {
   return Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm');

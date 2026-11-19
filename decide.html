@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Үзлэгийн хүсэлт — шийдвэр</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px; font-family: system-ui, "Segoe UI", Roboto, sans-serif; background: #f3f4f6; color: #111827; }
+    .card { max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h1 { margin: 0 0 16px; font-size: 22px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    td { padding: 6px 10px; vertical-align: top; }
+    td:first-child { color: #6b7280; white-space: nowrap; }
+    td:last-child { white-space: pre-wrap; }
+    label { display: block; font-weight: 600; font-size: 14px; margin: 16px 0 6px; }
+    textarea { width: 100%; min-height: 90px; padding: 10px; font: inherit; border: 1px solid #d1d5db; border-radius: 8px; }
+    button { margin-top: 20px; width: 100%; padding: 12px; font-size: 16px; font-weight: 600; color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+    .ok { background: #16a34a; } .no { background: #dc2626; }
+    button:disabled { opacity: .6; cursor: wait; }
+    .msg { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 14px; }
+    .msg.good { background: #ecfdf5; color: #065f46; }
+    .msg.bad { background: #fef2f2; color: #991b1b; }
+    .muted { color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 id="title">Ачааллаж байна…</h1>
+    <div id="details"></div>
+    <div id="act"></div>
+    <div id="msg"></div>
+  </div>
+
+  <script>
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2BlODHGqv6pkayWV74rQgsOlFgEZzMyb8a3ME4F0Bus0QcTlhldrWwlDQz7FrhcTCLQ/exec";
+
+    const q = new URLSearchParams(location.search);
+    const p = { id: q.get("id") || "", who: q.get("who") || "", sig: q.get("sig") || "", action: q.get("action") === "reject" ? "reject" : "approve" };
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function showMsg(text, good) {
+      $("msg").className = "msg " + (good ? "good" : "bad");
+      $("msg").textContent = text;
+    }
+
+    function detailsTable(r) {
+      const rows = [
+        ["Объект", r.object], ["Хаяг", r.address], ["Үзлэгийн төрөл", r.type], ["Яаралтай байдал", r.priority],
+        ["Тайлбар", r.description], ["Хүссэн огноо", r.preferredDate || "—"],
+        ["Хүсэлт гаргагч", r.requestedBy + " (" + r.requesterEmail + ")"], ["Илгээсэн", r.createdAt], ["Төлөв", r.status],
+      ];
+      return "<table>" + rows.map(x => "<tr><td>" + esc(x[0]) + "</td><td>" + esc(x[1]) + "</td></tr>").join("") + "</table>";
+    }
+
+    async function load() {
+      try {
+        const url = APPS_SCRIPT_URL + "?op=info&id=" + encodeURIComponent(p.id) + "&who=" + encodeURIComponent(p.who) + "&sig=" + encodeURIComponent(p.sig);
+        const out = await fetch(url).then(r => r.json());
+        if (!out.ok) { $("title").textContent = "Холбоос буруу байна"; showMsg(out.error, false); return; }
+        const r = out.request;
+        $("details").innerHTML = detailsTable(r);
+        if (!out.pending) {
+          $("title").textContent = "Шийдвэр гарсан байна";
+          showMsg(r.decidedBy + " " + r.decidedAt + "-д \"" + r.status + "\" гэж шийдвэрлэсэн." + (r.reason ? " Шалтгаан: " + r.reason : ""), r.status !== "Татгалзсан");
+          return;
+        }
+        if (p.action === "approve") {
+          $("title").textContent = "Хүсэлт зөвшөөрөх";
+          $("act").innerHTML = '<button id="b" class="ok">Зөвшөөрөх</button>';
+        } else {
+          $("title").textContent = "Хүсэлт татгалзах";
+          $("act").innerHTML = '<label for="reason">Татгалзсан шалтгаан <span style="color:#dc2626">*</span></label>' +
+            '<textarea id="reason" placeholder="Менежерт энэ шалтгаан имэйлээр очно"></textarea>' +
+            '<button id="b" class="no">Татгалзах</button>';
+        }
+        $("b").addEventListener("click", submit);
+      } catch (err) {
+        $("title").textContent = "Алдаа";
+        showMsg("Мэдээлэл ачаалж чадсангүй: " + err.message, false);
+      }
+    }
+
+    async function submit() {
+      const reasonEl = $("reason");
+      const reason = reasonEl ? reasonEl.value.trim() : "";
+      if (reasonEl && !reason) { showMsg("Татгалзсан шалтгаанаа бичнэ үү.", false); reasonEl.focus(); return; }
+      const b = $("b");
+      b.disabled = true; b.textContent = "Түр хүлээнэ үү…";
+      try {
+        const out = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ op: "decide", ...p, reason }),
+        }).then(r => r.json());
+        if (!out.ok) throw new Error(out.error);
+        $("act").innerHTML = "";
+        showMsg(out.message, true);
+      } catch (err) {
+        b.disabled = false; b.textContent = "Дахин оролдох";
+        showMsg("Алдаа: " + err.message, false);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
