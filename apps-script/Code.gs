@@ -49,6 +49,16 @@ function setup() {
   sh.setFrozenRows(1);
   MailApp.getRemainingDailyQuota(); // имэйл илгээх эрх асуулгах
   Logger.log('Бэлэн. Sheet: ' + ss.getUrl());
+  showListKey();
+}
+
+/** AMGAA ERA-д хүсэлтүүдийг уншуулах түлхүүр. Run дараад Execution log-оос хуулна. */
+function showListKey() {
+  const props = PropertiesService.getScriptProperties();
+  let k = props.getProperty('LIST_KEY');
+  if (!k) { k = Utilities.getUuid().replace(/-/g, ''); props.setProperty('LIST_KEY', k); }
+  Logger.log('AMGAA ERA-ийн түлхүүр: ' + k);
+  return k;
 }
 
 // ---------- 1. Форм илгээх ----------
@@ -102,9 +112,11 @@ function doPost(e) {
 
 // ---------- 2. Шийдвэрийн хуудас (decide.html) хүсэлтийн мэдээлэл авах ----------
 // GET ?op=info&id=..&who=..&sig=..  → JSON
+// GET ?op=list&key=..               → AMGAA ERA-д бүх хүсэлтийн жагсаалт (JSON)
 // Бусад GET (хуучин холбоос) → decide.html руу чиглүүлэх хуудас
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  if (p.op === 'list') return json(listRequests(p.key));
   if (p.op !== 'info') {
     const q = ['action', 'id', 'who', 'sig'].map(k => k + '=' + encodeURIComponent(p[k] || '')).join('&');
     const href = CONFIG.DECIDE_PAGE_URL + '?' + q;
@@ -116,6 +128,16 @@ function doGet(e) {
   if (!row) return json({ ok: false, error: 'Хүсэлт олдсонгүй' });
   const r = readRow(row);
   return json({ ok: true, approver: approver.name, request: r, pending: r.status === STATUS.pending });
+}
+
+function listRequests(key) {
+  const k = PropertiesService.getScriptProperties().getProperty('LIST_KEY');
+  if (!k || !key || key !== k) return { ok: false, error: 'Түлхүүр буруу байна' };
+  const sh = sheet();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true, requests: [] };
+  const rows = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();
+  return { ok: true, requests: rows.map(rowToObj).filter(r => r.id) };
 }
 
 // ---------- 3. Шийдвэр (хуудасны товчноос дуудагдана) ----------
@@ -183,7 +205,9 @@ function findRow(id) {
   return 0;
 }
 function readRow(row) {
-  const v = sheet().getRange(row, 1, 1, HEADERS.length).getValues()[0];
+  return rowToObj(sheet().getRange(row, 1, 1, HEADERS.length).getValues()[0]);
+}
+function rowToObj(v) {
   const g = h => {
     const x = v[COL[h] - 1];
     return x instanceof Date ? Utilities.formatDate(x, CONFIG.TIMEZONE, h === 'Хүссэн огноо' ? 'yyyy-MM-dd' : 'yyyy-MM-dd HH:mm') : x;
