@@ -84,7 +84,10 @@
 
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    // Хэрэглэгчийн орон нутгийн цагаар маргаашийн огноо (UTC биш)
+    const t = new Date();
+    t.setDate(t.getDate() + 1);
+    const tomorrow = [t.getFullYear(), String(t.getMonth() + 1).padStart(2, "0"), String(t.getDate()).padStart(2, "0")].join("-");
     document.getElementById("preferred_date").min = tomorrow;
 
     const form = document.getElementById("form");
