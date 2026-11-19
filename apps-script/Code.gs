@@ -17,7 +17,7 @@ const CONFIG = {
   TIMEZONE: 'Asia/Ulaanbaatar',
   // Хоосон орхивол автоматаар олно. Имэйлийн товч ажиллахгүй бол
   // Deploy хийсний дараах ".../exec" холбоосыг энд тавина.
-  WEB_APP_URL: '',
+  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycby2BlODHGqv6pkayWV74rQgsOlFgEZzMyb8a3ME4F0Bus0QcTlhldrWwlDQz7FrhcTCLQ/exec',
 };
 // ==========================================
 
