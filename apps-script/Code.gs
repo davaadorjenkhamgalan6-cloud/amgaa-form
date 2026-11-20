@@ -134,10 +134,11 @@ function listRequests(key) {
   const k = PropertiesService.getScriptProperties().getProperty('LIST_KEY');
   if (!k || !key || key !== k) return { ok: false, error: 'Түлхүүр буруу байна' };
   const sh = sheet();
+  const sheetUrl = sh.getParent().getUrl(); // AMGAA ERA-д "Google Sheet нээх" товч гаргахад
   const last = sh.getLastRow();
-  if (last < 2) return { ok: true, requests: [] };
+  if (last < 2) return { ok: true, sheetUrl, requests: [] };
   const rows = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();
-  return { ok: true, requests: rows.map(rowToObj).filter(r => r.id) };
+  return { ok: true, sheetUrl, requests: rows.map(rowToObj).filter(r => r.id) };
 }
 
 // ---------- 3. Шийдвэр (хуудасны товчноос дуудагдана) ----------
